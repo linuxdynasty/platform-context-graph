@@ -146,6 +146,7 @@ class TestCLICommands:
 
     def test_start_service_uses_combined_app(self, monkeypatch):
         """Test the combined service startup helper wires the service app into Uvicorn."""
+        runtime_role: str | None = None
         with (
             patch("platform_context_graph.cli.main.MCPServer") as mock_server_cls,
             patch("uvicorn.run") as mock_run,
@@ -155,10 +156,14 @@ class TestCLICommands:
             monkeypatch.setenv("PCG_API_KEY", "test-api-key")
             monkeypatch.delenv("PCG_RUNTIME_ROLE", raising=False)
             mock_server = mock_server_cls.return_value
-            start_service(host="0.0.0.0", port=9000, reload=False)
+            try:
+                start_service(host="0.0.0.0", port=9000, reload=False)
+                runtime_role = os.environ.get("PCG_RUNTIME_ROLE")
+            finally:
+                os.environ.pop("PCG_RUNTIME_ROLE", None)
 
         assert mock_server is mock_server_cls.return_value
-        assert os.environ["PCG_RUNTIME_ROLE"] == "api"
+        assert runtime_role == "api"
         app_obj = mock_run.call_args.args[0]
         assert app_obj.title == "PlatformContextGraph HTTP API"
         mock_run.assert_called_once_with(
@@ -188,6 +193,7 @@ class TestCLICommands:
         self, monkeypatch, tmp_path
     ):
         """Interactive local combined-service starts should generate a token once."""
+        generated: str | None = None
         with (
             patch("platform_context_graph.cli.main.MCPServer"),
             patch("uvicorn.run"),
@@ -204,9 +210,14 @@ class TestCLICommands:
                 lambda: True,
             )
 
-            start_service(host="127.0.0.1", port=9000, reload=False)
+            try:
+                start_service(host="127.0.0.1", port=9000, reload=False)
+                generated = os.environ.get("PCG_API_KEY")
+            finally:
+                os.environ.pop("PCG_API_KEY", None)
+                os.environ.pop("PCG_AUTO_GENERATE_API_KEY", None)
+                os.environ.pop("PCG_RUNTIME_ROLE", None)
 
-        generated = os.environ.get("PCG_API_KEY")
         assert generated
         assert (tmp_path / ".env").exists()
         assert f"PCG_API_KEY={generated}" in (tmp_path / ".env").read_text(
@@ -231,8 +242,11 @@ class TestCLICommands:
                 lambda: True,
             )
 
-            with pytest.raises(ValueError, match="PCG_API_KEY"):
-                start_service(host="127.0.0.1", port=9000, reload=False)
+            try:
+                with pytest.raises(ValueError, match="PCG_API_KEY"):
+                    start_service(host="127.0.0.1", port=9000, reload=False)
+            finally:
+                os.environ.pop("PCG_RUNTIME_ROLE", None)
 
     @patch("platform_context_graph.cli.main.run_bootstrap_index")
     def test_internal_bootstrap_index_command_uses_python_runtime(

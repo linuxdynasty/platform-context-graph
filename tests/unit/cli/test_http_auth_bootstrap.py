@@ -68,9 +68,11 @@ def test_interactive_cli_bootstrap_enables_local_http_api_key_generation(
     monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
     monkeypatch.setattr(cli_main, "_interactive_terminal_attached", lambda: True)
 
-    cli_main._enable_local_http_auth_bootstrap_if_interactive()
-
-    assert os.environ["PCG_AUTO_GENERATE_API_KEY"] == "true"
+    try:
+        cli_main._enable_local_http_auth_bootstrap_if_interactive()
+        assert os.environ["PCG_AUTO_GENERATE_API_KEY"] == "true"
+    finally:
+        os.environ.pop("PCG_AUTO_GENERATE_API_KEY", None)
 
 
 def test_interactive_cli_bootstrap_skips_kubernetes_runs(
