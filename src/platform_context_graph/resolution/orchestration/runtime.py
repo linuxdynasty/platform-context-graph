@@ -169,6 +169,7 @@ def run_resolution_iteration(
             failure = classify_resolution_failure(
                 exc,
                 failure_stage="project_work_item",
+                attempt_count=work_item.attempt_count,
             )
             terminal = work_item.attempt_count >= max_attempts
             next_retry_at = None

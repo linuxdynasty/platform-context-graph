@@ -57,6 +57,7 @@ def test_classify_neo4j_deadlock_as_retryable_dependency_unavailable() -> None:
     classification = classify_resolution_failure(
         deadlock_error,
         failure_stage="project_work_item",
+        attempt_count=1,
     )
 
     assert classification.error_class == "TransientError"
@@ -68,3 +69,26 @@ def test_classify_neo4j_deadlock_as_retryable_dependency_unavailable() -> None:
     )
     assert classification.retry_after_seconds is not None
     assert classification.retry_after_seconds > 0
+
+
+def test_classify_neo4j_deadlock_uses_attempt_aware_backoff() -> None:
+    """Neo4j transient failures should back off more on later attempts."""
+
+    deadlock_error = TransientError(
+        code="Neo.TransientError.Transaction.DeadlockDetected",
+        message="Deadlock detected while trying to acquire locks.",
+    )
+
+    first_attempt = classify_resolution_failure(
+        deadlock_error,
+        failure_stage="project_work_item",
+        attempt_count=1,
+    )
+    later_attempt = classify_resolution_failure(
+        deadlock_error,
+        failure_stage="project_work_item",
+        attempt_count=4,
+    )
+
+    assert first_attempt.retry_after_seconds == 15
+    assert later_attempt.retry_after_seconds == 120

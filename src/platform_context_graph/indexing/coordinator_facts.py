@@ -169,6 +169,7 @@ def project_repository_snapshot_facts(
         failure = classify_resolution_failure(
             exc,
             failure_stage=PROJECT_WORK_ITEM_STAGE,
+            attempt_count=work_item.attempt_count,
         )
         terminal = work_item.attempt_count >= max_attempts
         next_retry_at = None

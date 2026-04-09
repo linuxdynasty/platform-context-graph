@@ -13,6 +13,7 @@ from platform_context_graph.facts.work_queue.stages import ProjectionStageError
 
 _NEO4J_TRANSIENT_CODE_PREFIX = "Neo.TransientError."
 _NEO4J_TRANSIENT_RETRY_SECONDS = 15
+_NEO4J_TRANSIENT_MAX_RETRY_SECONDS = 120
 
 
 def _failure_code(exc: BaseException) -> str:
@@ -66,10 +67,19 @@ def _is_retryable_neo4j_transient(exc: BaseException) -> bool:
     return bool(code and code.startswith(_NEO4J_TRANSIENT_CODE_PREFIX))
 
 
+def _neo4j_retry_after_seconds(attempt_count: int) -> int:
+    """Return a bounded exponential retry delay for Neo4j transient failures."""
+
+    normalized_attempt = max(attempt_count, 1)
+    delay_seconds = _NEO4J_TRANSIENT_RETRY_SECONDS * (2 ** (normalized_attempt - 1))
+    return min(delay_seconds, _NEO4J_TRANSIENT_MAX_RETRY_SECONDS)
+
+
 def classify_resolution_failure(
     exc: BaseException,
     *,
     failure_stage: str,
+    attempt_count: int = 1,
 ) -> FailureClassification:
     """Map one projection exception into durable failure metadata."""
 
@@ -85,7 +95,7 @@ def classify_resolution_failure(
             failure_class=FailureClass.DEPENDENCY_UNAVAILABLE,
             failure_code=_neo4j_failure_code(underlying_exc),
             retry_disposition=FailureDisposition.RETRYABLE,
-            retry_after_seconds=_NEO4J_TRANSIENT_RETRY_SECONDS,
+            retry_after_seconds=_neo4j_retry_after_seconds(attempt_count),
         )
     if isinstance(underlying_exc, TimeoutError):
         return FailureClassification(
